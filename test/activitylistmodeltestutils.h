@@ -67,6 +67,7 @@ class TestingALM : public OCC::ActivityListModel
 
 public:
     TestingALM() = default;
+    using OCC::ActivityListModel::addEntriesToActivityList;
 
     [[nodiscard]] int maxActivities() const
     {
