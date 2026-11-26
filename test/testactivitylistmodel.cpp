@@ -449,6 +449,39 @@ private Q_SLOTS:
         QCOMPARE(model->notificationPreviewData().size(), 1);
     }
 
+    void testRecentActivityPreviewData_manySyncItems_benchmark()
+    {
+        const auto model = testingALM();
+        constexpr auto activityCount = 5000;
+        constexpr auto previewLimit = 6;
+        const auto now = QDateTime::currentDateTimeUtc();
+        auto activities = OCC::ActivityList{};
+        activities.reserve(activityCount);
+
+        for (auto row = 0; row < activityCount; ++row) {
+            auto activity = testSyncFileItemActivity;
+            activity._id = row + 1;
+            activity._file = u"file-%1.txt"_s.arg(row);
+            activity._dateTime = now.addSecs(row - activityCount);
+            activities.append(activity);
+        }
+        model->addEntriesToActivityList(activities);
+        QCOMPARE(model->rowCount(), activityCount);
+
+        auto previews = QVariantList{};
+        QBENCHMARK {
+            previews = model->recentActivityPreviewData(previewLimit);
+        }
+
+        QCOMPARE(previews.size(), previewLimit);
+        for (auto position = 0; position < previewLimit; ++position) {
+            const auto expectedRow = activityCount - position - 1;
+            const auto preview = previews.at(position).toMap();
+            QCOMPARE(preview.value(u"activityIndex"_s).toInt(), expectedRow);
+            QCOMPARE(preview.value(u"title"_s).toString(), u"file-%1.txt"_s.arg(expectedRow));
+        }
+    }
+
     // A first sync can report thousands of ignored files, each added on its own
     void testAddError_manyIgnoredFiles_benchmark()
     {
