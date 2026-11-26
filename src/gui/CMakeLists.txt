@@ -778,7 +778,7 @@ endif()
 ## handle DBUS for Fdo notifications
 if( UNIX AND NOT APPLE )
     find_package(Qt${QT_VERSION_MAJOR} ${REQUIRED_QT_VERSION} COMPONENTS DBus)
-    target_link_libraries(nextcloudCore PUBLIC Qt::DBus TBB::tbb)
+    target_link_libraries(nextcloudCore PUBLIC Qt::DBus)
     find_package(TBB CONFIG REQUIRED COMPONENTS tbb)
     target_link_libraries(nextcloudCore PRIVATE TBB::tbb)
     target_compile_definitions(nextcloudCore PUBLIC "USE_FDO_NOTIFICATIONS")
