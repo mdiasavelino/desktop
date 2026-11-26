@@ -39,6 +39,13 @@ Q_LOGGING_CATEGORY(lcActivity, "nextcloud.gui.activity", QtInfoMsg)
 
 constexpr auto defaultRecentActivityPreviewCount = 5;
 
+namespace
+{
+struct RecentActivityPreviewItem {
+    int row = -1;
+    Activity activity;
+};
+}
 
 ActivityListModel::ActivityListModel(QObject *parent)
     : QAbstractListModel(parent)
@@ -430,12 +437,26 @@ QVariantList ActivityListModel::buildRecentActivityPreviewData(const int limit) 
 
     recentActivities.reserve(limit);
 
-    for (const auto &candidate : buildRecentActivityList()) {
-        const auto previewText = candidate.activity.recentActivityPreviewText();
+    auto sortCandidates = [](const auto &left, const auto &right) {
+        return left.activity._dateTime > right.activity._dateTime;
+    };
+    std::set<RecentActivityPreviewItem, decltype(sortCandidates)> candidates(sortCandidates);
 
-        if (previewText.title.isEmpty()) {
-            continue;
+    std::mutex candidateMutex;
+    const auto *first = _finalList.constData();
+    std::for_each(std::execution::par, _finalList.cbegin(), _finalList.cend(), [first, &candidateMutex, &candidates](const Activity &activity) {
+        if (!activity.isRecentActivityPreviewCandidate() || activity.recentActivityPreviewText().title.isEmpty()) {
+            return;
         }
+
+        std::lock_guard lock{candidateMutex};
+        const auto row = static_cast<int>(std::addressof(activity) - first);
+
+        candidates.emplace(row, activity);
+    });
+
+    for (const auto &candidate : std::as_const(candidates)) {
+        const auto previewText = candidate.activity.recentActivityPreviewText();
 
         const auto modelIndex = index(candidate.row);
         recentActivities.push_back(QVariantMap{
@@ -457,8 +478,26 @@ QVariantList ActivityListModel::buildRecentActivityPreviewData(const int limit) 
 
 QVariantList ActivityListModel::buildNotificationPreviewData() const
 {
+    auto sortCandidates = [](const auto &left, const auto &right) {
+        return left.activity._dateTime > right.activity._dateTime;
+    };
+    std::set<RecentActivityPreviewItem, decltype(sortCandidates)> candidates(sortCandidates);
+
+    std::mutex candidateMutex;
+    const auto *first = _finalList.constData();
+    std::for_each(std::execution::par, _finalList.cbegin(), _finalList.cend(), [first, &candidateMutex, &candidates](const Activity &activity) {
+        if (!activity.isNotificationPreviewCandidate()) {
+            return;
+        }
+
+        std::lock_guard lock{candidateMutex};
+        const auto row = static_cast<int>(std::addressof(activity) - first);
+
+        candidates.emplace(row, activity);
+    });
+
     auto notifications = QVariantList{};
-    for (const auto &candidate : buildRecentActivityList()) {
+    for (const auto &candidate : std::as_const(candidates)) {
         auto title = candidate.activity.compactNotificationTitle();
         auto subtitle = QString{};
         auto systemIconName = candidate.activity.recentActivitySystemIconName();
@@ -507,36 +546,6 @@ void ActivityListModel::refreshPreviewData()
         _notificationPreviewData = notificationPreviewData;
         Q_EMIT notificationPreviewDataChanged();
     }
-}
-bool ActivityListModel::compareRecentActivity(const RecentActivityPreviewItem &left, const RecentActivityPreviewItem &right)
-{
-    if (left.activity._dateTime != right.activity._dateTime) {
-        return left.activity._dateTime > right.activity._dateTime;
-    }
-
-    return left.row < right.row;
-}
-ActivityListModel::RecentActivitySet ActivityListModel::buildRecentActivityList() const
-{
-    // auto sortCandidates = [](const auto &left, const auto &right) {
-    //     return left.activity._dateTime > right.activity._dateTime;
-    // };
-    RecentActivitySet candidates(compareRecentActivity);
-
-    std::mutex candidateMutex;
-    const auto *first = _finalList.constData();
-    std::for_each(std::execution::par, _finalList.cbegin(), _finalList.cend(), [first, &candidateMutex, &candidates](const Activity &activity) {
-        if (!activity.isRecentActivityPreviewCandidate()) {
-            return;
-        }
-
-        std::lock_guard lock{candidateMutex};
-        const auto row = static_cast<int>(std::addressof(activity) - first);
-
-        candidates.emplace(row, activity);
-    });
-
-    return candidates;
 }
 
 bool ActivityListModel::canFetchMore(const QModelIndex &) const

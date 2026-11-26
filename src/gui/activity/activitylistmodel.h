@@ -220,14 +220,6 @@ private:
     [[nodiscard]] QVariantList buildNotificationPreviewData() const;
     void refreshPreviewData();
 
-    struct RecentActivityPreviewItem {
-        int row = -1;
-        Activity activity;
-    };
-    static bool compareRecentActivity(const RecentActivityPreviewItem &left, const RecentActivityPreviewItem &right);
-    using RecentActivitySet = std::set<RecentActivityPreviewItem, decltype(&compareRecentActivity)>;
-    [[nodiscard]] RecentActivitySet buildRecentActivityList() const;
-
     Activity _notificationIgnoredFiles;
     Activity _dummyFetchingActivities;
 
